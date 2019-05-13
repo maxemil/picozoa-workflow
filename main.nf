@@ -36,7 +36,7 @@ process assembly {
   """
 }
 
-assembled_contigs.into{assembled_contigs_quast; assembled_contigs_prodigal}
+assembled_contigs.into{assembled_contigs_quast; assembled_contigs_prodigal; assembled_contigs_barrnap}
 
 process quast {
   input:
@@ -60,8 +60,21 @@ process quast {
 //
 // }
 //
-// process predictRNA {
-//
-//
-//
-// }
+process predictRNA {
+  input:
+  set val(id), file(contigs) from assembled_contigs_barrnap
+
+  output:
+  set val(id), file("*.gff") into barrnap_predictions optional true
+
+  publishDir "$id-output/barrnap"
+  cpus 4
+
+  script:
+  """
+  /opt/barrnap-0.8/bin/barrnap --threads ${task.cpus} --reject 0.2 --kingdom bac $contigs > bac.gff
+  /opt/barrnap-0.8/bin/barrnap --threads ${task.cpus} --reject 0.2 --kingdom arc $contigs > arc.gff
+  /opt/barrnap-0.8/bin/barrnap --threads ${task.cpus} --reject 0.2 --kingdom mito $contigs > mito.gff
+  /opt/barrnap-0.8/bin/barrnap --threads ${task.cpus} --reject 0.2 --kingdom euk $contigs > euk.gff
+  """
+}
