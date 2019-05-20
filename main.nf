@@ -37,7 +37,7 @@ process assembly {
   /opt/SPAdes-3.13.0-Linux/bin/spades.py -o spades --threads ${task.cpus} \
                       --tmp-dir tmp_dir -1 $forward -2 $reverse \
                       --sc --careful -k 21,33,55,99 \
-                      --memory ${task.memory}
+                      --memory 50
   """
 }
 
@@ -65,8 +65,8 @@ process predictGenes {
 
   output:
   file("${contigs.simpleName}.gff") into prodigal_gff
-  file("${contigs.simpleName}.fna") into prodigal_fna
-  file("${contigs.simpleName}.faa") into prodigal_faa
+  set val(id), file("${contigs.simpleName}.fna") into prodigal_fna
+  set val(id), file("${contigs.simpleName}.faa") into prodigal_faa
 
   publishDir "$id-output/prodigal"
   container "picozoa.sif"
@@ -94,5 +94,48 @@ process predictRNA {
   barrnap --threads ${task.cpus} --reject 0.2 --kingdom arc $contigs > arc.gff
   barrnap --threads ${task.cpus} --reject 0.2 --kingdom mito $contigs > mito.gff
   barrnap --threads ${task.cpus} --reject 0.2 --kingdom euk $contigs > euk.gff
+  """
+}
+
+process diamondNR {
+  input:
+  set val(id), file(queries) from prodigal_fna
+
+  output:
+  set val(id), file("${queries.simpleName}.daa") into diamond_daa
+
+  publishDir "$id-output/diamond"
+  cpus 10
+  maxForks 3
+
+  script:
+  """
+  /opt/diamond_0.9.9/diamond blastx --threads 30 \
+                -f 100 \
+                --sensitive \
+                -o ${queries.simpleName}.daa \
+                -q $queries \
+                -d /media/Data_2/diamond_dbs/nr_0.9.9.dmnd
+  """
+}
+
+
+
+process DAAMeganizer {
+  input:
+  set val(id), file(daa) from diamond_daa
+
+  output:
+  set val(id), file(daa) into meganized_daa
+
+  publishDir "$id-output/megan"
+  cpus 10
+  maxForks 3
+
+  script:
+  """
+  /opt/megan/tools/daa-meganizer --in $daa \
+                                 --acc2taxa /media/Data_2/megan/prot_acc2tax-Nov2018X1.abin \
+                                 --lcaAlgorithm Weighted
   """
 }
