@@ -28,8 +28,8 @@ process assembly {
 
   publishDir "$id-output"
   cpus 20
-  memory '50 GB'
-  maxForks 1
+  memory '30 GB'
+  maxForks 3
 
   script:
   """
@@ -110,7 +110,7 @@ process diamondNR {
 
   script:
   """
-  /opt/diamond_0.9.9/diamond blastx --threads 30 \
+  /opt/diamond_0.9.9/diamond blastx --threads ${task.cpus} \
                 -f 100 \
                 --sensitive \
                 -o ${queries.simpleName}.daa \
@@ -128,6 +128,7 @@ process DAAMeganizer {
   output:
   set val(id), file(daa) into meganized_daa
 
+  stageInMode 'copy'
   publishDir "$id-output/megan"
   cpus 10
   maxForks 3
@@ -137,5 +138,28 @@ process DAAMeganizer {
   /opt/megan/tools/daa-meganizer --in $daa \
                                  --acc2taxa /media/Data_2/megan/prot_acc2tax-Nov2018X1.abin \
                                  --lcaAlgorithm Weighted
+  """
+}
+
+
+process DaaToInfo {
+  input:
+  set val(id), file(daa) from meganized_daa
+
+  output:
+  set val(id), file("r2c.tab") into r2c
+  set val(id), file("c2c.tab") into c2c
+
+  publishDir "$id-output/megan"
+
+  script:
+  """
+  /opt/megan/tools/daa2info -r2c -n \
+                            -i $daa \
+                            -o r2c.tab
+
+  /opt/megan/tools/daa2info -c2c -n \
+                            -i $daa \
+                            -o c2c.tab
   """
 }
