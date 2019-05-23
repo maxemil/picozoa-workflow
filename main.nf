@@ -199,6 +199,6 @@ process getTaxNames {
           print("Could not find taxonomy")
   with open('contig2tax.tab', 'w') as out:
       for k, v in name2tax.items():
-          print("\\t".join([k, ";".join(name2group[v]), ";".join(v)]))
+          print("\\t".join([k, ";".join(name2group[k]), ";".join(v)]), file=out)
   """
 }
