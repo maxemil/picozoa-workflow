@@ -183,6 +183,7 @@ process getTaxNames {
 
   name2tax = defaultdict(list)
   name2group = defaultdict(set)
+  name2length = defaultdict(str)
   groups = ["Eukaryota", "Bacteria", "Archaea", "Viruses"]
   for line in open("${r2c}"):
       line = line.strip().split()
@@ -195,10 +196,11 @@ process getTaxNames {
               if g in lineage:
                   name2group[name].add(g)
           name2tax[name].append(tax)
+          name2length[name] = line[0].split('_')[3]
       except:
           print("Could not find taxonomy")
   with open('contig2tax.tab', 'w') as out:
       for k, v in name2tax.items():
-          print("\\t".join([k, ";".join(name2group[k]), ";".join(v)]), file=out)
+          print("\\t".join([k, name2length[k], ";".join(name2group[k]), ";".join(v)]), file=out)
   """
 }
