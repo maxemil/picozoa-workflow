@@ -174,31 +174,31 @@ process getTaxNames {
 
   script:
   """
-!# /usr/bin/python3
+  #! /usr/bin/python3
 
-import ete3
-from ete3 import ncbi_taxonomy
-ncbi = ncbi_taxonomy.NCBITaxa()
-from collections import defaultdict
+  import ete3
+  from ete3 import ncbi_taxonomy
+  ncbi = ncbi_taxonomy.NCBITaxa()
+  from collections import defaultdict
 
-name2tax = defaultdict(list)
-name2group = defaultdict(set)
-groups = ["Eukaryota", "Bacteria", "Archaea", "Viruses"]
-for line in open("${r2c}"):
-    line = line.strip().split()
-    name = "_".join(line[0].split('_')[:-1])
-    taxid = int(line[1])
-    try:
-        tax = ncbi.get_taxid_translator([taxid])[taxid]
-        lineage = ncbi.get_taxid_translator(ncbi.get_lineage(taxid)).values()
-        for g in groups:
-            if g in lineage:
-                name2group[name].add(g)
-        name2tax[name].append(tax)
-    except:
-        print("Could not find taxonomy")
-with open('contig2tax.tab', 'w') as out:
-    for k, v in name2tax.items():
-        print("\\t".join([k, ";".join(name2group[v]), ";".join(v)]))
+  name2tax = defaultdict(list)
+  name2group = defaultdict(set)
+  groups = ["Eukaryota", "Bacteria", "Archaea", "Viruses"]
+  for line in open("${r2c}"):
+      line = line.strip().split()
+      name = "_".join(line[0].split('_')[:-1])
+      taxid = int(line[1])
+      try:
+          tax = ncbi.get_taxid_translator([taxid])[taxid]
+          lineage = ncbi.get_taxid_translator(ncbi.get_lineage(taxid)).values()
+          for g in groups:
+              if g in lineage:
+                  name2group[name].add(g)
+          name2tax[name].append(tax)
+      except:
+          print("Could not find taxonomy")
+  with open('contig2tax.tab', 'w') as out:
+      for k, v in name2tax.items():
+          print("\\t".join([k, ";".join(name2group[v]), ";".join(v)]))
   """
 }
