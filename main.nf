@@ -41,7 +41,7 @@ process assembly {
   """
 }
 
-assembled_contigs.into{assembled_contigs_quast; assembled_contigs_prodigal; assembled_contigs_barrnap}
+assembled_contigs.into{assembled_contigs_quast; assembled_contigs_prodigal; assembled_contigs_barrnap; assembled_contigs_stats}
 
 process quast {
   input:
@@ -119,17 +119,38 @@ process diamondNR {
   """
 }
 
+diamond_daa.into{diamond_daa_megan; diamond_daa_blast}
+
+process diamondToBlast {
+  input:
+  set val(id), file(daa) from diamond_daa_blast
+
+  output:
+  set val(id), file("${daa.simpleName}.tab") into diamond_tab
+
+  publishDir "$id-output/diamond"
+  cpus 10
+  maxForks 3
+
+  script:
+  """
+  /opt/diamond_0.9.9/diamond view --daa ${daa} \
+                --threads ${task.cpus} \
+                -f 6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore \
+                -o ${daa.simpleName}.tab \
+  """
+}
 
 
 process DAAMeganizer {
   input:
-  set val(id), file(daa) from diamond_daa
+  set val(id), file(daa) from diamond_daa_megan
 
   output:
   set val(id), file(daa) into meganized_daa
 
   stageInMode 'copy'
-  publishDir "$id-output/megan"
+  publishDir "$id-output/megan-adjusted"
   cpus 10
   maxForks 3
 
@@ -137,7 +158,10 @@ process DAAMeganizer {
   """
   /opt/megan/tools/daa-meganizer --in $daa \
                                  --acc2taxa /media/Data_2/megan/prot_acc2tax-Nov2018X1.abin \
-                                 --lcaAlgorithm Weighted
+                                 --lcaAlgorithm Weighted \
+                                 --maxExpected 0.001 \
+                                 --minPercentIdentity 80.0 \
+                                 --topPercent 40
   """
 }
 
@@ -150,7 +174,7 @@ process DaaToInfo {
   set val(id), file("r2c.tab") into r2c
   set val(id), file("c2c.tab") into c2c
 
-  publishDir "$id-output/megan"
+  publishDir "$id-output/megan-adjusted"
 
   script:
   """
@@ -166,11 +190,15 @@ process DaaToInfo {
 process getTaxNames {
   input:
   set val(id), file(r2c) from r2c
+  set val(id2), file(contigs) from assembled_contigs_stats
 
   output:
   set val(id), file("contig2tax.tab") into contig2tax
 
-  publishDir "$id-output/megan"
+  publishDir "$id-output/-adjusted"
+
+  when:
+  "${id}" == "${id2}"
 
   script:
   """
@@ -180,6 +208,7 @@ process getTaxNames {
   from ete3 import ncbi_taxonomy
   ncbi = ncbi_taxonomy.NCBITaxa()
   from collections import defaultdict
+  from Bio import SeqIO
 
   name2tax = defaultdict(list)
   name2group = defaultdict(set)
@@ -199,6 +228,11 @@ process getTaxNames {
           name2length[name] = line[0].split('_')[3]
       except:
           print("Could not find taxonomy")
+
+  for rec in SeqIO.parse("$contigs", 'fasta'):
+      if not rec.id in name2tax.keys():
+          name2length[rec.id] = rec.id.split('_')[3]
+
   with open('contig2tax.tab', 'w') as out:
       for k, v in name2tax.items():
           print("\\t".join([k, name2length[k], ";".join(name2group[k]), ";".join(v)]), file=out)
