@@ -82,7 +82,10 @@ process predictRNA {
   set val(id), file(contigs) from assembled_contigs_barrnap
 
   output:
-  set val(id), file("*.gff") into barrnap_predictions optional true
+  set val(id), file("bac.gff"), file(contigs) into barrnap_predictions_bac optional true
+  set val(id), file("arc.gff"), file(contigs) into barrnap_predictions_arc optional true
+  set val(id), file("mito.gff"), file(contigs) into barrnap_predictions_mito optional true
+  set val(id), file("euk.gff"), file(contigs) into barrnap_predictions_euk optional true
 
   publishDir "$id-output/barrnap"
   container "picozoa.sif"
@@ -94,6 +97,37 @@ process predictRNA {
   barrnap --threads ${task.cpus} --reject 0.2 --kingdom arc $contigs > arc.gff
   barrnap --threads ${task.cpus} --reject 0.2 --kingdom mito $contigs > mito.gff
   barrnap --threads ${task.cpus} --reject 0.2 --kingdom euk $contigs > euk.gff
+  """
+}
+
+barrnap_predictions = barrnap_predictions_bac.concat( barrnap_predictions_arc, barrnap_predictions_mito, barrnap_predictions_euk )
+
+process classifySSU {
+  input:
+  set val(id), file(gffs), file(contigs) from barrnap_predictions
+
+  output:
+  set val(id), file("${gff.simpleName}.lca") into rna_lca optional true
+  set val(id), file("${gff.simpleName}.blastn") into rna_blastn optional true
+  set val(id), file("${gff.simpleName}.fna") into rna_fasta optional true
+
+  publishDir "$id-output/barrnap"
+  cpus 4
+
+  script:
+  """
+  python3 /media/Data_1/Max/misc-scripts/parse_barrnap.py -t ${task.cpus} -l $gff -r $contigs -o ${gff.simpleName}.fna
+
+  /opt/ncbi-blast-2.7.1+/bin/blastn -db /media/Data_2/SILVA/v132/SILVA_132_SSURef_Nr99_tax_silva_trunc.db \
+                    -query ${gff.simpleName}.fna \
+                    -num_threads ${task.cpus} \
+                    -out ${gff.simpleName}.blastn
+
+  /opt/megan/tools/blast2lca -i ${gff.simpleName}.blastn \
+                    -f BlastTab \
+                    -m BlastN \
+                    -o ${gff.simpleName}.lca \
+                    -s2t /media/Data_2/megan/SSURef_Nr99_132_tax_silva_to_NCBI_synonyms.map.gz
   """
 }
 
@@ -186,16 +220,17 @@ process DaaToInfo {
   """
 }
 
+tax_names = r2c.combine(assembled_contigs_stats)
+
 
 process getTaxNames {
   input:
-  set val(id), file(r2c) from r2c
-  set val(id2), file(contigs) from assembled_contigs_stats
+  set val(id), file(r2c), val(id2), file(contigs) from tax_names
 
   output:
   set val(id), file("contig2tax.tab") into contig2tax
 
-  publishDir "$id-output/-adjusted"
+  publishDir "$id-output/megan-adjusted"
 
   when:
   "${id}" == "${id2}"
@@ -232,6 +267,8 @@ process getTaxNames {
   for rec in SeqIO.parse("$contigs", 'fasta'):
       if not rec.id in name2tax.keys():
           name2length[rec.id] = rec.id.split('_')[3]
+          name2tax[rec.id] = ["no hit"]
+          name2group[rec.id] = set(["no hit"])
 
   with open('contig2tax.tab', 'w') as out:
       for k, v in name2tax.items():
