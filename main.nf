@@ -83,8 +83,6 @@ process predictRNA {
 
   output:
   set val(id), file("bac.gff"), file(contigs) into barrnap_predictions_bac optional true
-  set val(id), file("arc.gff"), file(contigs) into barrnap_predictions_arc optional true
-  set val(id), file("mito.gff"), file(contigs) into barrnap_predictions_mito optional true
   set val(id), file("euk.gff"), file(contigs) into barrnap_predictions_euk optional true
 
   publishDir "$id-output/barrnap"
@@ -94,40 +92,71 @@ process predictRNA {
   script:
   """
   barrnap --threads ${task.cpus} --reject 0.2 --kingdom bac $contigs > bac.gff
-  barrnap --threads ${task.cpus} --reject 0.2 --kingdom arc $contigs > arc.gff
-  barrnap --threads ${task.cpus} --reject 0.2 --kingdom mito $contigs > mito.gff
   barrnap --threads ${task.cpus} --reject 0.2 --kingdom euk $contigs > euk.gff
+  for gff in *.gff; do if grep -q -v '^#' \$gff; then echo \$gff; else rm \$gff; fi ; done
   """
 }
 
-barrnap_predictions = barrnap_predictions_bac.concat( barrnap_predictions_arc, barrnap_predictions_mito, barrnap_predictions_euk )
+barrnap_predictions_bac.concat( barrnap_predictions_euk ).into{barrnap_predictions_SSU; barrnap_predictions_LSU}
 
 process classifySSU {
   input:
-  set val(id), file(gffs), file(contigs) from barrnap_predictions
+  set val(id), file(gff), file(contigs) from barrnap_predictions
 
   output:
-  set val(id), file("${gff.simpleName}.lca") into rna_lca optional true
-  set val(id), file("${gff.simpleName}.blastn") into rna_blastn optional true
-  set val(id), file("${gff.simpleName}.fna") into rna_fasta optional true
+  set val(id), file("${gff.simpleName}.ssu.lca") into rna_lca optional true
+  set val(id), file("${gff.simpleName}.ssu.blastn") into rna_blastn optional true
+  set val(id), file("${gff.simpleName}.ssu.fna") into rna_fasta optional true
 
   publishDir "$id-output/barrnap"
   cpus 4
 
+
   script:
   """
-  python3 /media/Data_1/Max/misc-scripts/parse_barrnap.py -t ${task.cpus} -l $gff -r $contigs -o ${gff.simpleName}.fna
+  python3 /media/Data_1/Max/misc-scripts/parse_barrnap.py -t ${task.cpus} -l $gff -r $contigs -f 'SSU' -o ${gff.simpleName}.ssu.fna
 
   /opt/ncbi-blast-2.7.1+/bin/blastn -db /media/Data_2/SILVA/v132/SILVA_132_SSURef_Nr99_tax_silva_trunc.db \
-                    -query ${gff.simpleName}.fna \
+                    -query ${gff.simpleName}.ssu.fna \
                     -num_threads ${task.cpus} \
-                    -out ${gff.simpleName}.blastn
+                    -out ${gff.simpleName}.ssu.blastn
 
-  /opt/megan/tools/blast2lca -i ${gff.simpleName}.blastn \
+  /opt/megan/tools/blast2lca -i ${gff.simpleName}.ssu.blastn \
                     -f BlastTab \
                     -m BlastN \
-                    -o ${gff.simpleName}.lca \
+                    -o ${gff.simpleName}.ssu.lca \
                     -s2t /media/Data_2/megan/SSURef_Nr99_132_tax_silva_to_NCBI_synonyms.map.gz
+  """
+}
+
+
+process classifyLSU {
+  input:
+  set val(id), file(gff), file(contigs) from barrnap_predictions
+
+  output:
+  set val(id), file("${gff.simpleName}.lsu.lca") into rna_lca_lsu optional true
+  set val(id), file("${gff.simpleName}.lsu.blastn") into rna_blastn_lsu optional true
+  set val(id), file("${gff.simpleName}.lsu.fna") into rna_fasta_lsu optional true
+
+  publishDir "$id-output/barrnap"
+  cpus 4
+
+
+  script:
+  """
+  python3 /media/Data_1/Max/misc-scripts/parse_barrnap.py -t ${task.cpus} -l $gff -r $contigs -f 'LSU' -o ${gff.simpleName}.lsu.fna
+
+  /opt/ncbi-blast-2.7.1+/bin/blastn -db /media/Data_2/SILVA/v132/SILVA_132_LSURef_tax_silva_trunc.db \
+                    -query ${gff.simpleName}.lsu.fna \
+                    -num_threads ${task.cpus} \
+                    -out ${gff.simpleName}.lsu.blastn
+
+  /opt/megan/tools/blast2lca -i ${gff.simpleName}.lsu.blastn \
+                    -f BlastTab \
+                    -m BlastN \
+                    -o ${gff.simpleName}.lsu.lca \
+                    -s2t /media/Data_2/megan/LSURef_132_tax_silva_to_NCBI_synonyms.map.gz
   """
 }
 
