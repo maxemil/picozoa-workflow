@@ -101,7 +101,7 @@ barrnap_predictions_bac.concat( barrnap_predictions_euk ).into{barrnap_predictio
 
 process classifySSU {
   input:
-  set val(id), file(gff), file(contigs) from barrnap_predictions
+  set val(id), file(gff), file(contigs) from barrnap_predictions_SSU
 
   output:
   set val(id), file("${gff.simpleName}.ssu.lca") into rna_lca optional true
@@ -115,24 +115,26 @@ process classifySSU {
   script:
   """
   python3 /media/Data_1/Max/misc-scripts/parse_barrnap.py -t ${task.cpus} -l $gff -r $contigs -f 'SSU' -o ${gff.simpleName}.ssu.fna
-
-  /opt/ncbi-blast-2.7.1+/bin/blastn -db /media/Data_2/SILVA/v132/SILVA_132_SSURef_Nr99_tax_silva_trunc.db \
+  if [ -e ${gff.simpleName}.ssu.fna ];
+  then
+      /opt/ncbi-blast-2.7.1+/bin/blastn -db /media/Data_2/SILVA/v132/SILVA_132_SSURef_Nr99_tax_silva_trunc.db \
                     -query ${gff.simpleName}.ssu.fna \
                     -num_threads ${task.cpus} \
                     -out ${gff.simpleName}.ssu.blastn
 
-  /opt/megan/tools/blast2lca -i ${gff.simpleName}.ssu.blastn \
-                    -f BlastTab \
+      /opt/megan/tools/blast2lca -i ${gff.simpleName}.ssu.blastn \
+                    -f BlastText \
                     -m BlastN \
                     -o ${gff.simpleName}.ssu.lca \
                     -s2t /media/Data_2/megan/SSURef_Nr99_132_tax_silva_to_NCBI_synonyms.map.gz
+  fi
   """
 }
 
 
 process classifyLSU {
   input:
-  set val(id), file(gff), file(contigs) from barrnap_predictions
+  set val(id), file(gff), file(contigs) from barrnap_predictions_LSU
 
   output:
   set val(id), file("${gff.simpleName}.lsu.lca") into rna_lca_lsu optional true
@@ -146,17 +148,19 @@ process classifyLSU {
   script:
   """
   python3 /media/Data_1/Max/misc-scripts/parse_barrnap.py -t ${task.cpus} -l $gff -r $contigs -f 'LSU' -o ${gff.simpleName}.lsu.fna
-
-  /opt/ncbi-blast-2.7.1+/bin/blastn -db /media/Data_2/SILVA/v132/SILVA_132_LSURef_tax_silva_trunc.db \
+  if [ -e ${gff.simpleName}.lsu.fna ];
+  then
+      /opt/ncbi-blast-2.7.1+/bin/blastn -db /media/Data_2/SILVA/v132/SILVA_132_LSURef_tax_silva_trunc.db \
                     -query ${gff.simpleName}.lsu.fna \
                     -num_threads ${task.cpus} \
                     -out ${gff.simpleName}.lsu.blastn
 
-  /opt/megan/tools/blast2lca -i ${gff.simpleName}.lsu.blastn \
-                    -f BlastTab \
+      /opt/megan/tools/blast2lca -i ${gff.simpleName}.lsu.blastn \
+                    -f BlastText \
                     -m BlastN \
                     -o ${gff.simpleName}.lsu.lca \
                     -s2t /media/Data_2/megan/LSURef_132_tax_silva_to_NCBI_synonyms.map.gz
+  fi
   """
 }
 
